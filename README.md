@@ -63,7 +63,31 @@
 
 ## 🚀 快速开始
 
-### 方式一：Docker Compose（推荐）
+### 方式一：最简部署（复制即用）
+
+新建一个 `docker-compose.yml`，把**口令**和**保存路径**改成自己的，然后 `docker compose up -d`：
+
+```yaml
+services:
+  fanqiemiao:
+    image: kyson666/fanqiemiao:latest    # 也可用 ghcr.io/hanyuestar/fanqiemiao:latest
+    container_name: fanqiemiao
+    ports:
+      - "8107:8080"                      # 冒号左边是宿主机端口，可改成任意未被占用的端口
+    environment:
+      WEB_PASSWORD: 请改成足够长的口令      # 留空=不校验；公网暴露务必设置
+    volumes:
+      - /volume1/docker/fanqiemiao/data:/data           # 数据：内核配置/日志、库索引、历史
+      - /volume1/docker/fanqiemiao/download:/downloads  # ★ 小说成品保存到这里
+    restart: unless-stopped
+```
+
+浏览器打开 `http://<服务器IP>:8107`，输入上面设置的口令即可。
+
+> 只需改两处：`WEB_PASSWORD`（口令）与两个卷的**冒号左边**（宿主机目录）。
+> 卷的冒号右边（`/data`、`/downloads`）是容器内路径，**不要改**。
+
+### 方式二：使用仓库自带的 compose
 
 ```bash
 git clone https://github.com/hanyuestar/fanqiemiao.git
@@ -82,28 +106,26 @@ docker compose up -d        # 直接拉取已发布的多架构镜像（amd64 / 
 > **切换镜像源 / 版本**：
 > ```bash
 > IMAGE=kyson666/fanqiemiao docker compose up -d   # 改用 Docker Hub
-> TAG=v1.0.0 docker compose up -d                 # 指定版本标签
+> TAG=v1.0.2 docker compose up -d                  # 指定版本标签
 > ```
 
-### 方式二：docker run
+### 方式三：docker run
 
 ```bash
-# 使用已发布镜像（多架构：linux/amd64、linux/arm64）
 docker run -d \
-  --name fanqiemiao-web \
-  -p 8080:8080 \
+  --name fanqiemiao \
+  -p 8107:8080 \
   -e WEB_PASSWORD=你的口令 \
-  -v /srv/novels:/downloads \
-  -v /srv/fanqiemiao-data:/data \
+  -v /volume1/docker/fanqiemiao/data:/data \
+  -v /volume1/docker/fanqiemiao/download:/downloads \
   --restart unless-stopped \
-  ghcr.io/hanyuestar/fanqiemiao:latest
-# 或 Docker Hub： kyson666/fanqiemiao:latest
-
-# 或本地自行构建
-docker build -t fanqiemiao-web:latest .
+  kyson666/fanqiemiao:latest
+# 或 ghcr.io/hanyuestar/fanqiemiao:latest
 ```
 
-### 方式三：本地开发（不使用 Docker）
+> 镜像为多架构（linux/amd64、linux/arm64），`docker pull` 会自动选择匹配的架构。
+
+### 方式四：本地开发（不使用 Docker）
 
 ```bash
 # 需要一份可运行的番茄内核二进制（Linux / macOS / Windows 均可）
