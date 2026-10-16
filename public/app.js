@@ -488,6 +488,7 @@ async function loadTasks(silent = false) {
       return;
     }
     box.innerHTML = `
+      <div class="list-wrap">
       <table class="list">
         <thead><tr><th>书名</th><th>平台</th><th>状态</th><th>进度</th><th>操作</th></tr></thead>
         <tbody>
@@ -502,7 +503,8 @@ async function loadTasks(silent = false) {
                 : (t.state === '下载完成' && t.fileName ? `<a class="btn" href="${esc(withToken('/api/file?name=' + encodeURIComponent(t.fileName)))}">下载</a>` : '')}</td>
             </tr>`).join('')}
         </tbody>
-      </table>`;
+      </table>
+      </div>`;
     box.querySelectorAll('[data-cancel]').forEach((b) => {
       b.onclick = async () => {
         try {
@@ -540,6 +542,7 @@ async function loadLibrary() {
       return;
     }
     box.innerHTML = `
+      <div class="list-wrap">
       <table class="list">
         <thead><tr><th>文件名</th><th>大小</th><th>时间</th><th>操作</th></tr></thead>
         <tbody>
@@ -554,7 +557,8 @@ async function loadLibrary() {
               </td>
             </tr>`).join('')}
         </tbody>
-      </table>`;
+      </table>
+      </div>`;
     box.querySelectorAll('[data-del]').forEach((b) => {
       b.onclick = async () => {
         if (!confirm(`确认删除「${b.dataset.del}」？此操作不可恢复。`)) return;
