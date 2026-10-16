@@ -1,10 +1,29 @@
-# 构建上下文 = web/ 目录
+# 构建上下文排除项
+#
+# 说明：镜像内的实际内容由 Dockerfile 的 COPY 指令决定
+#       （仅 package.json / server/ / public/ + 构建期下载的内核二进制），
+#       本文件只用于缩小「构建上下文」，避免无关文件被上传给构建器。
+
+# 版本控制与 CI
+.git
+.github
+
+# 文档与测试
+docs/
+test/
+README.md
+*.md
+
+# 本地编排与配置
+docker-compose.yml
+docker-compose.*.yml
+.env
+.env.*
+
+# 本地运行产物
+# 注意：kernel/ 必须在构建期重新下载，绝不能把本地二进制带进上下文
 data/
 downloads/
 kernel/
 node_modules/
 npm-debug.log*
-.git
-.env
-*.md
-!README.md

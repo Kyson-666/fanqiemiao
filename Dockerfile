@@ -50,6 +50,8 @@ RUN apt-get update \
 WORKDIR /app
 
 # 后端（零 npm 运行时依赖，无需 install）
+# 注意：镜像内只包含以下三处 + 内核二进制；test/ docs/ .github/ 等一律不打包
+#      （未使用 `COPY . .`，故构建上下文中的无关文件不会进入镜像）
 COPY package.json ./package.json
 COPY server ./server
 COPY public ./public
