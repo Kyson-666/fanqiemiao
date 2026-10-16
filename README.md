@@ -108,7 +108,7 @@ docker compose up -d        # 直接拉取已发布的多架构镜像（amd64 / 
 > **切换镜像源 / 版本**：
 > ```bash
 > IMAGE=kyson666/fanqiemiao docker compose up -d   # 改用 Docker Hub
-> TAG=v1.0.2 docker compose up -d                  # 指定版本标签
+> TAG=v1.0.3 docker compose up -d                  # 指定版本标签
 > ```
 
 ### 方式三：docker run

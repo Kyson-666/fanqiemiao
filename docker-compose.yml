@@ -22,7 +22,7 @@ services:
     image: "${IMAGE:-ghcr.io/hanyuestar/fanqiemiao}:${TAG:-latest}"
     # 切换镜像源：
     #   IMAGE=kyson666/fanqiemiao docker compose up -d   # Docker Hub
-    #   TAG=v1.0.0 docker compose up -d                  # 指定版本
+    #   TAG=v1.0.3 docker compose up -d                  # 指定版本
     container_name: fanqiemiao-web
     ports:
       - "${WEB_PORT:-8080}:8080"
