@@ -40,15 +40,15 @@ RUN set -eux; \
 # ─────────────────────────────────────────────────────────────
 # 阶段 2：运行镜像（Node 服务 + 内核二进制 + 前端）
 # ─────────────────────────────────────────────────────────────
-FROM node:20-bookworm-slim
+# 基础镜像用 alpine（musl）：内核已是**静态 musl 构建**，不依赖 glibc，
+# 因此可以安全使用 musl 发行版；相比 debian bookworm-slim 可减小约 26 MB。
+FROM node:20-alpine
 
 # 重新声明全局 ARG，才能在 ENV 中使用
 ARG KERNEL_VERSION
 
-# 内核走 HTTPS 访问上游接口，需要根证书
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# 内核走 HTTPS 访问上游接口，需要根证书（静态 musl 版同样读取系统 CA 目录）
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
