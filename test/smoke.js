@@ -395,6 +395,33 @@ async function run() {
     }
   });
 
+  // ---------- 运行日志 ----------
+  log('');
+  log('[运行日志]');
+  await check('GET /api/logs 返回日志尾部（含封面/搜索/下载记录）', async () => {
+    const { status: code, data } = await api('/api/logs?lines=500');
+    assert(code === 200, 'HTTP ' + code);
+    assert(typeof data.file === 'string' && data.file, '缺少 file 字段');
+    assert(typeof data.kernelLog === 'string' && data.kernelLog, '缺少 kernelLog 字段');
+    assert(Array.isArray(data.lines), 'lines 非数组');
+    const text = (data.lines || []).join('\n');
+    assert(text.includes('[search]'), '缺少搜索日志（[search]）');
+    assert(text.includes('[cover]'), '缺少封面日志（[cover]）');
+    assert(text.includes('[download]'), '缺少下载日志（[download]）');
+  });
+  await check('GET /api/logs/download 可下载日志文件', async () => {
+    const res = await fetch(BASE + '/api/logs/download');
+    assert(res.status === 200, 'HTTP ' + res.status);
+    assert((res.headers.get('content-disposition') || '').includes('attachment'), '缺少 attachment');
+    const text = await res.text();
+    assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/m.test(text), '日志时间戳格式异常');
+    assert(text.includes('[server]'), '缺少启动日志（[server]）');
+  });
+  await check('GET /api/logs/download 非法文件名被拒绝', async () => {
+    const res = await fetch(BASE + '/api/logs/download?file=' + encodeURIComponent('../../../secret.txt'));
+    assert(res.status === 400, 'HTTP ' + res.status);
+  });
+
   // ---------- 汇总 ----------
   log('');
   log('─'.repeat(52));

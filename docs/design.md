@@ -69,7 +69,8 @@
         │          ├─ /api/tasks    任务进度 / 取消          │
         │          ├─ /api/library  文件库 / 删除            │
         │          ├─ /api/file     文件下载                 │
-        │          └─ /api/cover    封面代理                 │
+        │          ├─ /api/cover    封面代理                 │
+        │          └─ /api/logs     运行日志（预览/下载）    │
         │                 │ 内部 127.0.0.1:18423             │
         │          ┌──────▼───────────────────┐              │
         │          │ 番茄内核（Rust，子进程）   │              │
@@ -107,6 +108,10 @@
 1. 内核产物先落 `/data/staging`；
 2. 后端在任务完成后把成品 TXT **搬运**到 `/downloads`，并规范命名为 `书名 作者 [ID].txt`；
 3. 中间文件（封面、缓存）全部留在 `/data`，`/downloads` 只保留成品。
+
+**运行日志**：封面（主源失败 / 备用源命中 / 全部不可用）、搜索（关键词、结果数、耗时、错误）、
+下载（任务创建 / 完成 / 失败 / 取消）与服务启停等事件，追加写入 **`/data/logs/app.log`**
+（超过 5MB 轮转为 `app.log.1`），并同时输出到 stdout；设置页可预览与下载，接口为 `/api/logs`、`/api/logs/download`。
 
 ### 3.2 内核子进程管理
 
@@ -148,6 +153,7 @@ fanqiemiao/                          # 仓库：https://github.com/hanyuestar/fa
 │   ├── qimao-crypto.js              # 七猫 AES-128-CBC + ZIP 读写
 │   ├── writers.js                   # TXT / EPUB 写出
 │   ├── store.js                     # 库/历史/设置持久化
+│   ├── logger.js                    # 运行日志（持久化到 /data/logs）
 │   └── tasks.js                     # 下载任务队列
 ├── public/                          # 前端 SPA（原生 HTML/CSS/JS）
 ├── test/

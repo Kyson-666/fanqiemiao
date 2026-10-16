@@ -18,6 +18,7 @@ const fanqie = require('./fanqie');
 const qimao = require('./qimao');
 const tasks = require('./tasks');
 const httpc = require('./http');
+const log = require('./logger');
 
 const PUBLIC_DIR = path.resolve(__dirname, '..', 'public');
 const MIME = {
@@ -92,6 +93,12 @@ function coverLabel(value) {
   } catch {
     return String(value).slice(0, 100);
   }
+}
+
+/** 运行日志文件名白名单（防目录穿越） */
+function safeLogFile(name) {
+  if (name !== 'app.log' && name !== 'app.log.1') return null;
+  return path.join(log.dir, name);
 }
 
 /** 按魔数嗅探图片类型（返回空字符串表示未知/不支持） */
@@ -184,9 +191,16 @@ async function handleAPI(req, res, url) {
     const q = url.searchParams.get('q') || '';
     const platform = url.searchParams.get('platform') || 'fanqie';
     if (!q.trim()) return sendJSON(res, 400, { error: '请输入关键词' });
-    const items = platform === 'qimao' ? await qimao.search(q) : await fanqie.search(q);
-    store.addHistory({ type: 'search', key: `${platform}:${q}`, title: q, platform });
-    return sendJSON(res, 200, { items, platform });
+    const t0 = Date.now();
+    try {
+      const items = platform === 'qimao' ? await qimao.search(q) : await fanqie.search(q);
+      store.addHistory({ type: 'search', key: `${platform}:${q}`, title: q, platform });
+      log.info('search', `platform=${platform} q="${q}" items=${items.length} elapsed=${Date.now() - t0}ms`);
+      return sendJSON(res, 200, { items, platform });
+    } catch (err) {
+      log.error('search', `platform=${platform} q="${q}" 失败：${err && err.message} elapsed=${Date.now() - t0}ms`);
+      throw err;
+    }
   }
 
   // 详情
@@ -297,7 +311,7 @@ async function handleAPI(req, res, url) {
           break;
         }
         if (i > 0 || failures.length) {
-          console.warn(`[fanqiemiao-web] 封面主源不可用，备用源命中：${coverLabel(target)} → ${coverLabel(candidate)}${failures.length ? `（${failures.join('; ')}）` : ''}`);
+          log.warn('cover', `主源不可用，备用源命中：${coverLabel(target)} → ${coverLabel(candidate)}${failures.length ? `（${failures.join('; ')}）` : ''}`);
         }
         res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=86400' });
         res.end(buf);
@@ -309,11 +323,41 @@ async function handleAPI(req, res, url) {
     }
 
     const reason = failures.join('; ') || (lastType ? `不支持 ${lastType}` : '没有可用封面源');
-    console.warn(`[fanqiemiao-web] 封面所有来源均不可用：${coverLabel(target)} :: ${reason}`);
+    log.warn('cover', `所有来源均不可用：${coverLabel(target)} :: ${reason}`);
     // 兜底交给浏览器直连第一个候选（若服务器出口被 CDN 屏蔽，用户侧网络仍可能可达）。
     const redirect = candidates.find((u) => !/\.hei[cf](\?|$)/i.test(u)) || target;
     res.writeHead(302, { Location: redirect, 'Cache-Control': 'no-store' });
     res.end();
+    return;
+  }
+
+  // 运行日志：尾部预览（封面 / 搜索 / 下载等事件持久化在 /data/logs/app.log）
+  if (p === '/api/logs' && method === 'GET') {
+    const lines = Math.min(Math.max(parseInt(url.searchParams.get('lines') || '200', 10) || 200, 1), 500);
+    const info = log.fileInfo();
+    return sendJSON(res, 200, {
+      file: info.file,
+      kernelLog: config.kernelLog,
+      exists: info.exists,
+      size: info.size,
+      mtime: info.mtime,
+      lines: log.tail(lines),
+    });
+  }
+
+  // 运行日志：完整文件下载（app.log / app.log.1）
+  if (p === '/api/logs/download' && method === 'GET') {
+    const name = url.searchParams.get('file') || 'app.log';
+    const full = safeLogFile(name);
+    if (!full) return sendText(res, 400, '非法文件名');
+    if (!fs.existsSync(full)) return sendText(res, 404, '日志不存在');
+    const stat = fs.statSync(full);
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Length': stat.size,
+      'Content-Disposition': `attachment; filename="${name}"`,
+    });
+    fs.createReadStream(full).pipe(res);
     return;
   }
 
@@ -364,12 +408,13 @@ server.listen(config.port, '0.0.0.0', () => {
   console.log(`[fanqiemiao-web] 数据目录 ${config.dataDir}`);
   console.log(`[fanqiemiao-web] 内核 ${config.kernelBin}`);
   if (config.webPassword) console.log('[fanqiemiao-web] 已开启访问口令');
+  log.info('server', `启动：version=${require('../package.json').version} port=${config.port} 数据=${config.dataDir} 下载=${config.downloadDir}`);
   // 预热内核（不阻塞启动）
   kernel.ensureReady().catch((err) => {
-    console.warn('[fanqiemiao-web] 番茄内核启动失败：', err.message);
+    log.warn('server', `番茄内核启动失败：${err.message}`);
     const tail = kernel.logTail(5);
-    if (tail) console.warn('[fanqiemiao-web] 内核日志末尾：\n  ' + tail.replace(/ \| /g, '\n  '));
-    console.warn('[fanqiemiao-web] 提示：七猫小说与番茄榜单不依赖内核，仍可正常使用。');
+    if (tail) log.warn('server', `内核日志末尾：${tail.replace(/ \| /g, ' | ')}`);
+    log.warn('server', '提示：七猫小说与番茄榜单不依赖内核，仍可正常使用。');
   });
 });
 

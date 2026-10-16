@@ -176,6 +176,15 @@ table.list tr:last-child td { border-bottom: 0; }
 .panel .row .k { color: var(--text-dim); min-width: 110px; }
 code.inline { background: #f1f2f4; padding: 2px 6px; border-radius: 6px; font-size: 12px; }
 
+/* ── 运行日志 ── */
+.log-tail {
+  background: #fafbfc; border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; margin: 4px 0 12px; max-height: 260px; overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+  font-size: 12px; line-height: 1.55; color: #334155;
+  white-space: pre-wrap; word-break: break-all;
+}
+
 /* ── toast ── */
 .toast-root { position: fixed; right: 20px; bottom: 20px; z-index: 80; display: flex; flex-direction: column; gap: 8px; }
 .toast {

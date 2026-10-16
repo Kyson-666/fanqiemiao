@@ -42,12 +42,14 @@
 ### 设置
 - 内核状态与版本、可执行文件路径
 - 当前下载目录（由卷映射决定）
+- **运行日志**：预览最近 150 行、一键下载完整日志（封面 / 搜索 / 下载事件均已持久化）
 - **最近查看**历史（搜索 / 书籍）与一键清空
 
 ### 部署与运维
 - **单容器**：Node 服务 + 内核二进制 + 前端一体化，`docker compose up -d --build` 即完成部署
 - **零 npm 运行时依赖**：只用 Node 内置模块（`http`/`crypto`/`zlib`/`child_process`/`fs`），无 `node_modules`、无构建步骤
 - **文件持久化**：`/downloads` 卷可映射到服务器任意路径；`/data` 卷保存内核配置、日志、库索引、历史
+- **运行日志持久化**：封面 / 搜索 / 下载等运行事件追加写入 `/data/logs/app.log`（5MB 自动轮转），设置页可预览与下载，便于排查问题
 - **访问口令**：设置 `WEB_PASSWORD` 即开启（公网暴露必备）
 - **前端零依赖**：原生 HTML/CSS/JS 单页应用，Hash 路由，无需打包工具
 - **优雅降级**：内核不可用时，七猫与番茄榜单仍可正常使用，并在顶部给出明确状态提示
@@ -187,7 +189,8 @@ WEB_PORT=8080
         │          ├─ /api/tasks    任务进度 / 取消        │
         │          ├─ /api/library  文件库 / 删除          │
         │          ├─ /api/file     文件下载               │
-        │          └─ /api/cover    封面代理               │
+        │          ├─ /api/cover    封面代理               │
+        │          └─ /api/logs     运行日志（预览/下载）  │
         │                 │ 内部 127.0.0.1:18423           │
         │          ┌──────▼───────────────────┐            │
         │          │ 番茄内核（Rust，子进程）   │            │
@@ -218,6 +221,7 @@ fanqiemiao/
 │   ├── qimao-crypto.js   # 七猫 AES-128-CBC + ZIP 读写
 │   ├── writers.js        # TXT / EPUB 写出
 │   ├── store.js          # 库索引 / 历史 / 设置持久化
+│   ├── logger.js         # 运行日志（持久化到 /data/logs）
 │   └── tasks.js          # 下载任务队列
 ├── public/               # 前端 SPA（原生 HTML/CSS/JS）
 ├── test/                 # 自检与冒烟测试
@@ -245,6 +249,8 @@ fanqiemiao/
 | GET | `/api/library` · DELETE `/api/library?file=` | 文件库 / 删除文件 |
 | GET | `/api/file?name=` | 下载文件 |
 | GET | `/api/cover?url=` | 封面代理 |
+| GET | `/api/logs?lines=` | 运行日志尾部（封面/搜索/下载事件） |
+| GET | `/api/logs/download?file=` | 下载日志文件（`app.log` / `app.log.1`） |
 | GET/POST | `/api/history` · `/api/history/clear` | 最近查看 |
 | GET/POST | `/api/settings` | 设置 |
 
@@ -253,7 +259,7 @@ fanqiemiao/
 ## ✅ 测试
 
 ```bash
-# 单元自检：签名 / AES / ZIP / uuid5 / 写出（11 项）
+# 单元自检：签名 / AES / ZIP / uuid5 / 写出 / 封面转换（12 项）
 npm run selftest
 
 # 端到端冒烟：需服务已启动（榜单/搜索/详情/下载/文件库/设置 全链路）
@@ -261,7 +267,7 @@ npm run smoke
 ```
 
 冒烟测试覆盖：内核状态、番茄榜单分类与榜单书籍、七猫榜单、番茄/七猫搜索、番茄/七猫详情、
-番茄/七猫下载（含进度轮询与落盘校验）、任务列表与取消、文件库列表/下载/删除、封面代理、历史、设置、访问口令鉴权。
+番茄/七猫下载（含进度轮询与落盘校验）、任务列表与取消、文件库列表/下载/删除、封面代理、历史、设置、访问口令鉴权、运行日志预览与下载。
 
 ---
 

@@ -576,9 +576,10 @@ async function loadLibrary() {
 
 async function renderSettings() {
   view().innerHTML = `<div class="loading"><span class="spinner"></span>加载中…</div>`;
-  const [statusData, histData] = await Promise.all([
+  const [statusData, histData, logData] = await Promise.all([
     api('/api/status').catch(() => null),
     api('/api/history').catch(() => ({ history: [] })),
+    api('/api/logs?lines=150').catch(() => null),
   ]);
   const k = statusData ? statusData.kernel : {};
   const settings = statusData ? statusData.settings : {};
@@ -601,6 +602,17 @@ async function renderSettings() {
       <div class="row"><span class="k">说明</span><span>该目录由容器卷挂载决定，可在 <code class="inline">docker-compose.yml</code> 中把宿主机任意路径映射到它。</span></div>
     </div>
 
+    ${logData ? `
+    <div class="panel">
+      <h3>运行日志 <button class="btn" id="refreshLogs">刷新</button></h3>
+      <div class="row"><span class="k">应用日志</span><code class="inline">${esc(logData.file || '')}</code>${logData.exists ? `<span style="color:#6b7280">${fmtSize(logData.size)}</span>` : '<span style="color:#6b7280">暂无</span>'}</div>
+      <div class="row"><span class="k">内核日志</span><code class="inline">${esc(logData.kernelLog || '')}</code></div>
+      ${logData.lines && logData.lines.length
+        ? `<pre class="log-tail">${esc(logData.lines.join('\n'))}</pre>`
+        : '<div style="color:#6b7280;margin-bottom:10px">暂无日志</div>'}
+      <div class="row"><a class="btn" href="${esc(withToken('/api/logs/download'))}">下载完整日志</a><span style="color:#6b7280;font-size:12px">记录封面 / 搜索 / 下载事件，便于排查问题</span></div>
+    </div>` : ''}
+
     <div class="panel">
       <h3>最近查看 <span class="spacer"></span><button class="btn danger" id="clearHist">清空</button></h3>
       <div id="histBox">${history.length
@@ -620,6 +632,8 @@ async function renderSettings() {
     toast('已清空', 'ok');
     renderSettings();
   };
+  const refreshLogs = $('#refreshLogs');
+  if (refreshLogs) refreshLogs.onclick = () => renderSettings();
 }
 
 // ─────────────────────────────── 内核状态条 ───────────────────────────────

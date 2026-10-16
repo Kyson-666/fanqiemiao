@@ -9,6 +9,7 @@ const config = require('./config');
 const fanqie = require('./fanqie');
 const qimao = require('./qimao');
 const store = require('./store');
+const log = require('./logger');
 
 const tasks = new Map(); // id → task
 const MAX_KEEP = 200;
@@ -82,6 +83,7 @@ function start({ platform, bookID, title, author, range }) {
   };
   tasks.set(id, task);
   prune();
+  log.info('download', `新增任务 id=${id} ${task.platform === 'qimao' ? '七猫' : '番茄'} 《${task.title}》[${task.bookID}]${range && range.end > 0 ? ` 章节 ${range.start || 1}-${range.end}` : ''}`);
   run(id, range).catch(() => {});
   return snapshot(task);
 }
@@ -113,6 +115,7 @@ async function run(id, range) {
       size: result.size,
       saved: t.total || t.saved,
     });
+    log.info('download', `完成 id=${id} 《${t.title}》 → ${result.fileName}（${(result.size / 1024).toFixed(1)} KB，用时 ${Math.round((Date.now() - t.createdAt) / 1000)}s）`);
     store.addLibraryEntry({
       fileName: result.fileName,
       platform: t.platform,
@@ -127,6 +130,7 @@ async function run(id, range) {
       return;
     }
     update(id, { state: '失败', message: err.message || String(err) });
+    log.error('download', `失败 id=${id} ${t.platform === 'qimao' ? '七猫' : '番茄'}《${t.title}》 :: ${err.message || String(err)}`);
   }
 }
 
@@ -136,6 +140,7 @@ function cancel(id) {
   if (['下载完成', '失败', '已取消'].includes(t.state)) return false;
   t.cancelled = true;
   update(id, { state: '已取消' });
+  log.info('download', `已取消 id=${id} 《${t.title}》`);
   return true;
 }
 
