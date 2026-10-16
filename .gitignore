@@ -1,0 +1,7 @@
+# 依赖与产物（本地运行 / 构建时生成）
+node_modules/
+data/
+downloads/
+kernel/
+npm-debug.log*
+.env

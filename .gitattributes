@@ -1,0 +1,6 @@
+# 统一使用 LF，保证在 Linux 容器内运行一致
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary

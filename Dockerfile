@@ -1,0 +1,72 @@
+# syntax=docker/dockerfile:1
+
+# ─────────────────────────────────────────────────────────────
+# 阶段 1：拉取上游 Rust 内核（Tomato-Novel-Downloader）的 Linux 预编译二进制
+#   番茄搜索/详情/下载由该内核提供；镜像内以子进程方式启动（仅监听 127.0.0.1）
+# ─────────────────────────────────────────────────────────────
+ARG KERNEL_VERSION=v2.4.15
+
+FROM debian:bookworm-slim AS kernel
+ARG TARGETARCH
+ARG KERNEL_VERSION
+# 国内加速前缀（留空则直连 GitHub）。可改为 https://ghfast.top/
+ARG KERNEL_MIRROR=https://ghfast.top/
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) ASSET="TomatoNovelDownloader-Linux_amd64-${KERNEL_VERSION}" ;; \
+      arm64) ASSET="TomatoNovelDownloader-Linux_arm64-${KERNEL_VERSION}" ;; \
+      *) echo "不支持的架构: ${TARGETARCH}"; exit 1 ;; \
+    esac; \
+    URL="https://github.com/zhongbai2333/Tomato-Novel-Downloader/releases/download/${KERNEL_VERSION}/${ASSET}"; \
+    mkdir -p /out; \
+    echo "下载内核: ${URL}"; \
+    if ! curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 "${URL}" -o /out/TomatoNovelDownloader; then \
+      echo "直连失败，改用镜像 ${KERNEL_MIRROR}${URL}"; \
+      curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 "${KERNEL_MIRROR}${URL}" -o /out/TomatoNovelDownloader; \
+    fi; \
+    chmod 0755 /out/TomatoNovelDownloader; \
+    SIZE=$(stat -c %s /out/TomatoNovelDownloader); \
+    echo "内核大小: ${SIZE} 字节"; \
+    if [ "${SIZE}" -lt 1000000 ]; then echo "下载内容异常（疑似错误页）"; exit 1; fi
+
+# ─────────────────────────────────────────────────────────────
+# 阶段 2：运行镜像（Node 服务 + 内核二进制 + 前端）
+# ─────────────────────────────────────────────────────────────
+FROM node:20-bookworm-slim
+
+# 重新声明全局 ARG，才能在 ENV 中使用
+ARG KERNEL_VERSION
+
+# 内核走 HTTPS 访问上游接口，需要根证书
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 后端（零 npm 运行时依赖，无需 install）
+COPY package.json ./package.json
+COPY server ./server
+COPY public ./public
+
+# 内核二进制
+COPY --from=kernel /out/TomatoNovelDownloader /app/kernel/TomatoNovelDownloader
+
+ENV NODE_ENV=production \
+    PORT=8080 \
+    DATA_DIR=/data \
+    DOWNLOAD_DIR=/downloads \
+    KERNEL_BIN=/app/kernel/TomatoNovelDownloader \
+    TOMATO_KERNEL_VERSION=${KERNEL_VERSION}
+
+RUN mkdir -p /data /downloads
+
+EXPOSE 8080
+
+# 说明：以 root 运行以规避宿主机卷的属主/权限问题；如需非 root，可自行改 USER 并 chown 卷目录
+CMD ["node", "server/index.js"]

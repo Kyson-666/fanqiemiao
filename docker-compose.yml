@@ -1,0 +1,38 @@
+# 番茄喵 Web · Docker Compose
+#
+# 持久化：
+#   - ${DATA_HOST_DIR:-./data}           → /data        （内核配置/日志、库索引、历史、暂存）
+#   - ${DOWNLOAD_HOST_DIR:-./downloads}  → /downloads   （小说成品 TXT，持久化目标）
+#
+# 用法：
+#   cp .env.example .env   # 按需修改下载目录 / 口令
+#   docker compose up -d --build
+#   浏览器打开 http://<服务器IP>:8080
+
+services:
+  fanqiemiao-web:
+    build:
+      context: .
+      args:
+        KERNEL_VERSION: ${KERNEL_VERSION:-v2.4.15}
+        # 国内网络可保留加速前缀；如直连顺畅可置空
+        KERNEL_MIRROR: ${KERNEL_MIRROR:-https://ghfast.top/}
+    image: "${IMAGE:-ghcr.io/hanyuestar/fanqiemiao}:${TAG:-latest}"
+    # 也可直接用 Docker Hub 镜像：
+    #   IMAGE=kyson666/fanqiemiao docker compose up -d
+    # 本地自行构建（覆盖上面的 image）：
+    #   docker compose up -d --build
+    container_name: fanqiemiao-web
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    environment:
+      # 非空则开启访问口令（强烈建议公网暴露时设置）
+      WEB_PASSWORD: ${WEB_PASSWORD:-}
+      DATA_DIR: /data
+      DOWNLOAD_DIR: /downloads
+    volumes:
+      # 数据目录（可自定义宿主机路径）
+      - "${DATA_HOST_DIR:-./data}:/data"
+      # ★ 小说持久化目录：改成本机任意路径即可
+      - "${DOWNLOAD_HOST_DIR:-./downloads}:/downloads"
+    restart: unless-stopped

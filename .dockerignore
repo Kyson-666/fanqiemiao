@@ -1,0 +1,10 @@
+# 构建上下文 = web/ 目录
+data/
+downloads/
+kernel/
+node_modules/
+npm-debug.log*
+.git
+.env
+*.md
+!README.md

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>番茄喵 Web · 小说下载器</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🍅</span>
+      <span class="brand-name">番茄喵 <em>Web</em></span>
+    </div>
+
+    <div class="platform-toggle" id="platformToggle">
+      <button data-platform="fanqie" class="active">番茄小说</button>
+      <button data-platform="qimao">七猫小说</button>
+    </div>
+
+    <form class="search" id="searchForm">
+      <input id="searchInput" type="text" placeholder="书名 / 数字 ID / 书籍链接" autocomplete="off" />
+      <button type="submit">搜索</button>
+    </form>
+
+    <nav class="nav" id="nav">
+      <a href="#/rank" data-route="rank">榜单</a>
+      <a href="#/search" data-route="search">搜索</a>
+      <a href="#/downloads" data-route="downloads">下载</a>
+      <a href="#/library" data-route="library">文件库</a>
+      <a href="#/settings" data-route="settings">设置</a>
+    </nav>
+  </header>
+
+  <div class="kernel-bar" id="kernelBar"></div>
+
+  <main id="view" class="view"></main>
+
+  <div class="modal-root" id="modalRoot"></div>
+  <div class="toast-root" id="toastRoot"></div>
+
+  <footer class="footer">
+    <span>番茄喵 Web · 自托管版 · 仅供个人学习与本地备份使用，请支持正版</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
