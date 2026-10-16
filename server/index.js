@@ -84,6 +84,17 @@ function safeJoin(dir, name) {
   return full;
 }
 
+/** 按魔数嗅探图片类型（上游封面有 jpeg / webp / png） */
+function guessImageType(buf) {
+  if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') {
+    return 'image/webp';
+  }
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.length >= 8 && buf[0] === 0x89 && buf.toString('ascii', 1, 4) === 'PNG') return 'image/png';
+  if (buf.length >= 6 && /^GIF8[79]a$/.test(buf.toString('ascii', 0, 6))) return 'image/gif';
+  return 'image/jpeg';
+}
+
 // ─────────────────────────────── 静态资源 ───────────────────────────────
 
 function serveStatic(req, res, pathname) {
@@ -230,19 +241,32 @@ async function handleAPI(req, res, url) {
     return;
   }
 
-  // 封面代理（规避跨域 / 混合内容）
+  // 封面代理（规避跨域 / 内核本地地址不可达）
   if (p === '/api/cover' && method === 'GET') {
     const target = url.searchParams.get('url') || '';
     if (!/^https?:\/\//.test(target)) return sendText(res, 400, '非法地址');
     try {
+      const origin = new URL(target).origin;
       const buf = await httpc.getBuffer(target, {
-        timeout: 15000,
-        headers: { 'User-Agent': httpc.BROWSER_UA, Referer: 'https://fanqienovel.com/' },
+        timeout: 20000,
+        headers: {
+          'User-Agent': httpc.BROWSER_UA,
+          // 关键：Referer 必须与目标同源，否则部分图床/防盗链会直接 403
+          Referer: origin + '/',
+          Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        },
       });
-      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+      res.writeHead(200, {
+        // 透传真实类型（webp 不能标成 jpeg）
+        'Content-Type': guessImageType(buf),
+        'Cache-Control': 'public, max-age=86400',
+      });
       res.end(buf);
-    } catch {
-      sendText(res, 404, '封面加载失败');
+    } catch (err) {
+      // 服务端拉不到时（如服务器在境外、CDN 拦截机房 IP），兜底让浏览器直连原地址
+      console.warn(`[fanqiemiao-web] 封面代理失败（改由浏览器直连）：${target} :: ${err && err.message}`);
+      res.writeHead(302, { Location: target, 'Cache-Control': 'no-store' });
+      res.end();
     }
     return;
   }
@@ -296,7 +320,10 @@ server.listen(config.port, '0.0.0.0', () => {
   if (config.webPassword) console.log('[fanqiemiao-web] 已开启访问口令');
   // 预热内核（不阻塞启动）
   kernel.ensureReady().catch((err) => {
-    console.warn('[fanqiemiao-web] 内核预热失败：', err.message);
+    console.warn('[fanqiemiao-web] 番茄内核启动失败：', err.message);
+    const tail = kernel.logTail(5);
+    if (tail) console.warn('[fanqiemiao-web] 内核日志末尾：\n  ' + tail.replace(/ \| /g, '\n  '));
+    console.warn('[fanqiemiao-web] 提示：七猫小说与番茄榜单不依赖内核，仍可正常使用。');
   });
 });
 

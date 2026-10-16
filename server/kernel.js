@@ -128,6 +128,14 @@ class Kernel {
     fs.closeSync(logFd);
     this.startedAt = Date.now();
 
+    // spawn 失败（如权限不足 / 格式不可执行）会以 error 事件抛出，必须接住，
+    // 否则会变成未捕获异常直接把 Node 进程带崩。
+    this.proc.on('error', (err) => {
+      this.proc = null;
+      this.phase = 'failed';
+      this.lastError = `内核进程启动失败：${err && err.message}`;
+    });
+
     this.proc.on('exit', (code, signal) => {
       this.proc = null;
       if (this.stopping) {
@@ -135,7 +143,8 @@ class Kernel {
         return;
       }
       this.phase = 'failed';
-      this.lastError = `内核进程退出（code=${code} signal=${signal}）`;
+      // 进程被信号杀死时 code 为 null，用 signal 描述更准确
+      this.lastError = code === null ? `内核进程被信号终止（${signal}）` : `内核进程退出（code=${code}）`;
       // 限流自动重启：最多 3 次，每次间隔 3s
       if (this.restarts < 3) {
         this.restarts += 1;
@@ -147,9 +156,11 @@ class Kernel {
 
     const ready = await this._waitHealthy(60000);
     if (!ready) {
-      this.lastError = this.lastError || '内核启动超时（60s），详见 ' + config.kernelLog;
-      this.phase = 'failed';
       this.stop();
+      // 把内核自身的报错（如缺 glibc / 架构不符）带进错误信息，界面与 docker logs 都能直接看到
+      const tail = this.logTail(3);
+      this.lastError = (this.lastError || '内核启动失败') + (tail ? `（${tail}）` : '');
+      this.phase = 'failed'; // 覆盖 stop() 写入的 'stopped'，避免前端误显示为「正在启动」
       throw new Error(this.lastError);
     }
     this.restarts = 0;
@@ -167,6 +178,20 @@ class Kernel {
       await new Promise((r) => setTimeout(r, 300));
     }
     return null;
+  }
+
+  /** 读取内核日志末尾 n 行，用于把真实失败原因暴露到界面 / docker logs */
+  logTail(n = 3) {
+    try {
+      const lines = fs
+        .readFileSync(config.kernelLog, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean);
+      return lines.slice(-n).join(' | ');
+    } catch {
+      return '';
+    }
   }
 
   stop() {

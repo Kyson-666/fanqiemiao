@@ -611,6 +611,9 @@ async function refreshStatusBar() {
     } else if (k.phase === 'missing') {
       bar.className = 'kernel-bar show err';
       bar.innerHTML = `● 未找到番茄内核，番茄搜索/下载不可用（七猫与番茄榜单仍可使用）· 请检查镜像构建是否包含内核`;
+    } else if (k.phase === 'failed') {
+      bar.className = 'kernel-bar show err';
+      bar.innerHTML = `● 番茄内核启动失败：${esc(k.error || '未知原因')}<br>七猫小说与番茄榜单不依赖内核，仍可正常使用`;
     } else {
       bar.className = 'kernel-bar show warn';
       bar.innerHTML = `● 番茄内核正在启动…（七猫与番茄榜单可先使用）`;
@@ -649,9 +652,13 @@ function init() {
     setRoute('search');
   });
 
+  // 顶部导航：显式接管路由
+  // （此前只 preventDefault 而未接管跳转，导致「下载 / 文件库 / 设置」等只能经导航进入的页面点不动）
   $('#nav').addEventListener('click', (e) => {
-    const a = e.target.closest('a');
-    if (a) e.preventDefault();
+    const a = e.target.closest('a[data-route]');
+    if (!a) return;
+    e.preventDefault();
+    setRoute(a.dataset.route);
   });
 
   render();
@@ -659,4 +666,9 @@ function init() {
   setInterval(refreshStatusBar, 15000);
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// 脚本位于 body 末尾，正常情况下 DOM 尚未就绪；加一层兜底防止事件已错过
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

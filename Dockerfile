@@ -17,9 +17,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
+    # 使用 musl 静态构建：官方 glibc 版要求 GLIBC_2.39，而 Debian 12(bookworm) 仅 2.36，
+    # 直接运行会报 "version `GLIBC_2.39' not found"。musl 版为完全静态链接（无 PT_INTERP/DT_NEEDED），
+    # 可在任意 Linux 发行版上运行，不再受基础镜像 glibc 版本约束。
     case "${TARGETARCH}" in \
-      amd64) ASSET="TomatoNovelDownloader-Linux_amd64-${KERNEL_VERSION}" ;; \
-      arm64) ASSET="TomatoNovelDownloader-Linux_arm64-${KERNEL_VERSION}" ;; \
+      amd64) ASSET="TomatoNovelDownloader-Linux_musl_amd64-${KERNEL_VERSION}" ;; \
+      arm64) ASSET="TomatoNovelDownloader-Linux_musl_arm64-${KERNEL_VERSION}" ;; \
       *) echo "不支持的架构: ${TARGETARCH}"; exit 1 ;; \
     esac; \
     URL="https://github.com/zhongbai2333/Tomato-Novel-Downloader/releases/download/${KERNEL_VERSION}/${ASSET}"; \
