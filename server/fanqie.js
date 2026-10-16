@@ -356,6 +356,7 @@ function mapSearchItems(json) {
       const title = String(item.title || raw.book_name || '');
       if (!title) return null;
       const wordCount = Number(raw.word_number || 0);
+      const coverURLs = bestCover(raw);
       return {
         platform: 'fanqie',
         bookID,
@@ -365,10 +366,66 @@ function mapSearchItems(json) {
         score: fmtScore(raw.score),
         words: wordCount > 0 ? fmtWords(wordCount) : '',
         hot: String(raw.read_count_text || ''),
-        coverURL: resolveCover(raw.thumb_url, kernel.baseURL),
+        coverURL: coverURLs[0] || '',
+        coverFallbackURLs: coverURLs.slice(1),
       };
     })
     .filter(Boolean);
+}
+
+/**
+ * 番茄封面候选 URL，按优先级排列。
+ * 搜索接口的 `thumb_url` / `expand_thumb_url` 往往是 HEIC（桌面浏览器不能显示）；
+ * 优先把 thumb_uri 转为 byteimg 原图地址，再从音频封面等字段抽取备用的原图 key。
+ * 返回的 URL 都指向可直接被浏览器解码的 PNG/JPEG 原图；HEIC 签名 URL 仅作最后兜底时不返回。
+ */
+const FANQIE_ORIGIN_HOST = 'https://p3-novel.byteimg.com';
+const FANQIE_ORIGIN_KEY_RE = /^((?:novel-pic|novel-static|novel-images|tos-cn-[\w-]+)\/[\w.-]+)(?:~|$)/i;
+
+function bestCover(raw) {
+  const candidates = [
+    raw.thumb_uri,
+    raw.reputation_thumb_uri,
+    raw.audio_thumb_uri,
+    raw.audio_thumb_url_hd,
+    raw.thumb_url,
+    raw.expand_thumb_url,
+    raw.detail_page_thumb_url,
+  ];
+  const urls = [];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const url = normalizeFanqieCover(candidate);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+  }
+  return urls;
+}
+
+function normalizeFanqieCover(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  let pathname = raw;
+  if (/^https?:\/\//i.test(raw)) {
+    let u;
+    try {
+      u = new URL(raw);
+    } catch {
+      return '';
+    }
+    // 已经是 byteimg 的可访问原图地址，保留完整路径。
+    if (/^p[0-9]+-novel\.byteimg\.com$/i.test(u.hostname) && u.pathname.startsWith('/origin/')) {
+      return u.toString();
+    }
+    pathname = u.pathname;
+  }
+
+  pathname = pathname.replace(/^\/+/, '');
+  const m = pathname.match(FANQIE_ORIGIN_KEY_RE);
+  if (m && !m[1].split('/').includes('..')) return `${FANQIE_ORIGIN_HOST}/origin/${m[1]}`;
+  return '';
 }
 
 function mapBookInfo(json, fallbackID) {
@@ -383,6 +440,7 @@ function mapBookInfo(json, fallbackID) {
     category: String(json.category || ''),
     chapterCount: Number(json.chapter_count || 0),
     coverURL: resolveCover(json.detail_cover_url || json.cover_url, kernel.baseURL),
+    coverFallbackURLs: [],
     words: wordCount > 0 ? fmtWords(wordCount) : '',
     hot: String(json.read_count_text || ''),
     score: fmtScore(json.score),
@@ -401,6 +459,7 @@ function searchItemFromInfo(info) {
     words: info.words,
     hot: info.hot,
     coverURL: info.coverURL,
+    coverFallbackURLs: info.coverFallbackURLs || [],
   };
 }
 
@@ -458,4 +517,6 @@ module.exports = {
   extractBookID,
   FanqieError,
   RANK_BASE,
+  bestCover,
+  normalizeFanqieCover,
 };

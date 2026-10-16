@@ -191,6 +191,16 @@ async function run() {
     const res = await fetch(BASE + '/api/cover?url=file:///etc/passwd');
     assert(res.status === 400, 'HTTP ' + res.status);
   });
+  await check('GET /api/cover 主源 403 时自动使用备用图片源', async () => {
+    const primary = 'https://p3-novel.byteimg.com/origin/tos-cn-i-1yzifmftcy/aa397a902e2c443d8c4e9e18da70f26a';
+    const fallback = 'https://p3-novel.byteimg.com/origin/novel-pic/p2o8160c6f3604925a8915b245c3e14684a';
+    const q = new URLSearchParams({ url: primary, fallback });
+    const res = await fetch(BASE + '/api/cover?' + q.toString());
+    assert(res.status === 200, 'HTTP ' + res.status);
+    assert(res.headers.get('content-type') === 'image/png', 'Content-Type=' + res.headers.get('content-type'));
+    const buf = Buffer.from(await res.arrayBuffer());
+    assert(buf.length > 1000 && buf[0] === 0x89 && buf.toString('ascii', 1, 4) === 'PNG', '备用内容不是 PNG');
+  });
 
   // ---------- 下载管理 ----------
   log('');

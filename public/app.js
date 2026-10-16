@@ -64,9 +64,26 @@ function toast(message, kind = '') {
   setTimeout(() => el.remove(), 3200);
 }
 
-function coverSrc(url) {
+function coverSrc(url, fallbackURLs = []) {
   if (!url) return '';
-  return '/api/cover?url=' + encodeURIComponent(url);
+  const q = new URLSearchParams({ url, v: '2' }); // v 参数换新缓存键，避免旧 HEIC 响应缓存 24h
+  for (const fallback of fallbackURLs || []) if (fallback) q.append('fallback', fallback);
+  return '/api/cover?' + q.toString();
+}
+
+/** 封面加载失败时的占位图（避免出现裂图） */
+const COVER_PLACEHOLDER =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="160">' +
+      '<rect width="100%" height="100%" fill="#eef1f5"/>' +
+      '<text x="50%" y="55%" font-size="42" fill="#b8c2cc" text-anchor="middle" font-family="sans-serif">书</text>' +
+      '</svg>'
+  );
+
+function coverErr(el) {
+  el.onerror = null;
+  el.src = COVER_PLACEHOLDER;
 }
 
 function esc(s) {
@@ -239,7 +256,7 @@ async function loadQimaoRank() {
 
 function cardHTML(book, rank) {
   const cover = book.coverURL
-    ? `<img class="cover" src="${esc(coverSrc(book.coverURL))}" loading="lazy" onerror="this.style.visibility='hidden'">`
+    ? `<img class="cover" src="${esc(coverSrc(book.coverURL, book.coverFallbackURLs))}" loading="lazy" onerror="coverErr(this)">`
     : `<div class="cover"></div>`;
   const meta = [book.score, book.words, book.hot].filter(Boolean).map((m) => `<span>${esc(m)}</span>`).join('');
   return `
@@ -329,7 +346,7 @@ function renderDetail(book, platform) {
       <div class="modal">
         <div class="modal-head">
           ${book.coverURL
-            ? `<img src="${esc(coverSrc(book.coverURL))}" onerror="this.style.visibility='hidden'">`
+            ? `<img src="${esc(coverSrc(book.coverURL, book.coverFallbackURLs))}" onerror="coverErr(this)">`
             : `<div style="width:110px;height:150px;border-radius:10px;background:#eef0f3;flex:none"></div>`}
           <div class="h-info">
             <h2>${esc(book.title)}</h2>

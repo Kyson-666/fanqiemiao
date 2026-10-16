@@ -84,7 +84,17 @@ function safeJoin(dir, name) {
   return full;
 }
 
-/** 按魔数嗅探图片类型（上游封面有 jpeg / webp / png） */
+/** 仅在服务端日志记录域名与路径，不泄漏带签名的 query 参数 */
+function coverLabel(value) {
+  try {
+    const u = new URL(value);
+    return `${u.hostname}${u.pathname}`;
+  } catch {
+    return String(value).slice(0, 100);
+  }
+}
+
+/** 按魔数嗅探图片类型（返回空字符串表示未知/不支持） */
 function guessImageType(buf) {
   if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') {
     return 'image/webp';
@@ -92,7 +102,13 @@ function guessImageType(buf) {
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
   if (buf.length >= 8 && buf[0] === 0x89 && buf.toString('ascii', 1, 4) === 'PNG') return 'image/png';
   if (buf.length >= 6 && /^GIF8[79]a$/.test(buf.toString('ascii', 0, 6))) return 'image/gif';
-  return 'image/jpeg';
+  // 已允许浏览器渲染的常见图片类型；HEIC/HEIF 明确拒绝并尝试备用地址
+  if (buf.length >= 12 && buf.toString('ascii', 4, 8) === 'ftyp') {
+    const brand = buf.toString('ascii', 8, 12).toLowerCase();
+    if (brand.startsWith('avif') || brand.startsWith('avis')) return 'image/avif';
+    if (/^(hei[cfx]|hevc|hevx|mif1|msf1|heim|heis|hevm|hevs)/.test(brand)) return 'image/heic';
+  }
+  return '';
 }
 
 // ─────────────────────────────── 静态资源 ───────────────────────────────
@@ -241,33 +257,57 @@ async function handleAPI(req, res, url) {
     return;
   }
 
-  // 封面代理（规避跨域 / 内核本地地址不可达）
+  // 封面代理：依次尝试主 URL 与番茄端提供的备用 URL。
+  // 原 URL 可能是 403（源 CDN 限制）或 HEIC（桌面浏览器无法解码）；两种情况都试备用源。
   if (p === '/api/cover' && method === 'GET') {
     const target = url.searchParams.get('url') || '';
-    if (!/^https?:\/\//.test(target)) return sendText(res, 400, '非法地址');
-    try {
-      const origin = new URL(target).origin;
-      const buf = await httpc.getBuffer(target, {
-        timeout: 20000,
-        headers: {
-          'User-Agent': httpc.BROWSER_UA,
-          // 关键：Referer 必须与目标同源，否则部分图床/防盗链会直接 403
-          Referer: origin + '/',
-          Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-        },
-      });
-      res.writeHead(200, {
-        // 透传真实类型（webp 不能标成 jpeg）
-        'Content-Type': guessImageType(buf),
-        'Cache-Control': 'public, max-age=86400',
-      });
-      res.end(buf);
-    } catch (err) {
-      // 服务端拉不到时（如服务器在境外、CDN 拦截机房 IP），兜底让浏览器直连原地址
-      console.warn(`[fanqiemiao-web] 封面代理失败（改由浏览器直连）：${target} :: ${err && err.message}`);
-      res.writeHead(302, { Location: target, 'Cache-Control': 'no-store' });
-      res.end();
+    const fallbacks = url.searchParams.getAll('fallback').slice(0, 4);
+    const candidates = [...new Set([target, ...fallbacks].filter((u) => /^https?:\/\//i.test(u)))];
+    if (!candidates.length) return sendText(res, 400, '非法地址');
+
+    const failures = [];
+    let lastType = '';
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      try {
+        const origin = new URL(candidate).origin;
+        const buf = await httpc.getBuffer(candidate, {
+          timeout: 20000,
+          headers: {
+            'User-Agent': httpc.BROWSER_UA,
+            Referer: origin + '/',
+            Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+          },
+        });
+        const type = guessImageType(buf);
+        lastType = type;
+        if (!type) throw new Error('响应不是受支持的图片格式');
+        if (type === 'image/heic' && i < candidates.length - 1) {
+          failures.push(`${new URL(candidate).hostname}: HEIC 不受桌面浏览器支持`);
+          continue;
+        }
+        if (type === 'image/heic') {
+          failures.push(`${new URL(candidate).hostname}: HEIC 不受桌面浏览器支持`);
+          break;
+        }
+        if (i > 0 || failures.length) {
+          console.warn(`[fanqiemiao-web] 封面主源不可用，备用源命中：${coverLabel(target)} → ${coverLabel(candidate)}${failures.length ? `（${failures.join('; ')}）` : ''}`);
+        }
+        res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=86400' });
+        res.end(buf);
+        return;
+      } catch (err) {
+        const message = String((err && err.message) || '请求失败').match(/HTTP \d{3}/)?.[0] || '请求失败';
+        failures.push(`${coverLabel(candidate)}: ${message}`);
+      }
     }
+
+    const reason = failures.join('; ') || (lastType ? `不支持 ${lastType}` : '没有可用封面源');
+    console.warn(`[fanqiemiao-web] 封面所有来源均不可用：${coverLabel(target)} :: ${reason}`);
+    // 兜底交给浏览器直连第一个候选（若服务器出口被 CDN 屏蔽，用户侧网络仍可能可达）。
+    const redirect = candidates.find((u) => !/\.hei[cf](\?|$)/i.test(u)) || target;
+    res.writeHead(302, { Location: redirect, 'Cache-Control': 'no-store' });
+    res.end();
     return;
   }
 

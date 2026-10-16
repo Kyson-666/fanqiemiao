@@ -11,6 +11,7 @@ const zlib = require('zlib');
 const sign = require('../server/qimao-sign');
 const crypt = require('../server/qimao-crypto');
 const writers = require('../server/writers');
+const fanqie = require('../server/fanqie');
 
 let passed = 0;
 function ok(name) {
@@ -157,6 +158,29 @@ console.log('七猫签名 / 加解密 / 压缩 自检');
   assert.ok(text.includes('正文'));
   fs.rmSync(dir, { recursive: true, force: true });
   ok('TXT 写出结构正确');
+}
+
+// 11) 番茄 HEIC 签名封面改写为 byteimg PNG/JPEG 原图地址，并提供备用源
+{
+  const raw = {
+    thumb_uri: 'tos-cn-i-1yzifmftcy/aa397a902e2c443d8c4e9e18da70f26a',
+    audio_thumb_uri:
+      'https://p3-reading-sign.fqnovelpic.com/novel-pic/p2o8160c6f3604925a8915b245c3e14684a~tplv-tt-cs0:440:440.heic?lk3s=token',
+    thumb_url:
+      'https://p3-reading-sign.fqnovelpic.com/tos-cn-i-1yzifmftcy/0c40ad00d1024e03a4189efbece7682d~tplv:300:0.heic?lk3s=token',
+  };
+  const urls = fanqie.bestCover(raw);
+  assert.ok(urls.length >= 2, '应至少有一个可用备用源');
+  assert.strictEqual(urls[0], 'https://p3-novel.byteimg.com/origin/tos-cn-i-1yzifmftcy/aa397a902e2c443d8c4e9e18da70f26a');
+  assert.ok(urls.some((u) => u === 'https://p3-novel.byteimg.com/origin/novel-pic/p2o8160c6f3604925a8915b245c3e14684a'));
+  assert.ok(urls.every((u) => !/\.hei[cf](\?|$)/i.test(u)), '不得把 HEIC 直链送给桌面浏览器');
+  assert.strictEqual(fanqie.normalizeFanqieCover('https://p3-novel.byteimg.com/origin/novel-static/abc123'),
+    'https://p3-novel.byteimg.com/origin/novel-static/abc123');
+  assert.strictEqual(
+    fanqie.normalizeFanqieCover('https://p3-reading-sign.fqnovelpic.com/novel-pic/p2o123~tplv-cs0:440:440.heic?x-signature=secret'),
+    'https://p3-novel.byteimg.com/origin/novel-pic/p2o123'
+  );
+  ok('番茄 HEIC 封面转换原图 URL + 备用源');
 }
 
 console.log(`\n全部通过：${passed} 项`);
