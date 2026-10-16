@@ -343,7 +343,7 @@ async function run() {
   // ---------- 访问口令 ----------
   log('');
   log('[访问口令鉴权]');
-  await check('开启口令后：无口令 401 / 带口令 200', async () => {
+  await check('开启口令后：401/200 两种口令方式，且封面/文件 ?token= 放行', async () => {
     const port = 8091;
     const child = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'index.js')], {
       env: {
@@ -377,6 +377,19 @@ async function run() {
       assert(withAuth.status === 200, '带口令应为 200，实际 ' + withAuth.status);
       const byQuery = await fetch('http://127.0.0.1:' + port + '/api/status?token=smoke-secret');
       assert(byQuery.status === 200, '?token= 方式应放行，实际 ' + byQuery.status);
+
+      // 非 fetch 场景（<img>/下载链接）只能带 ?token=：封面代理必须放行
+      // （曾漏测：口令模式下所有封面 <img> 请求 401 → 全部显示占位图）
+      const cover = 'https://cdn.qimao.com/bookimg/zww/upload/readerCover/68/203050_360x480.jpg?time=1607394498';
+      const noTokenCover = await fetch('http://127.0.0.1:' + port + '/api/cover?url=' + encodeURIComponent(cover));
+      assert(noTokenCover.status === 401, '封面无 token 应为 401，实际 ' + noTokenCover.status);
+      const tokenCover = await fetch('http://127.0.0.1:' + port + '/api/cover?url=' + encodeURIComponent(cover) + '&token=smoke-secret');
+      assert(tokenCover.status === 200, '封面带 token 应为 200，实际 ' + tokenCover.status);
+      assert((tokenCover.headers.get('content-type') || '').startsWith('image/'), '封面类型异常：' + tokenCover.headers.get('content-type'));
+      const fileNoToken = await fetch('http://127.0.0.1:' + port + '/api/file?name=x.txt');
+      assert(fileNoToken.status === 401, '文件接口无 token 应为 401，实际 ' + fileNoToken.status);
+      const fileToken = await fetch('http://127.0.0.1:' + port + '/api/file?name=not-exist.txt&token=smoke-secret');
+      assert(fileToken.status === 404, '文件接口带 token 应已放行（404），实际 ' + fileToken.status);
     } finally {
       child.kill('SIGKILL');
     }

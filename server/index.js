@@ -37,8 +37,8 @@ function sendJSON(res, status, obj) {
   res.end(body);
 }
 
-function sendText(res, status, text, type = 'text/plain; charset=utf-8') {
-  res.writeHead(status, { 'Content-Type': type });
+function sendText(res, status, text, type = 'text/plain; charset=utf-8', headers = {}) {
+  res.writeHead(status, { 'Content-Type': type, ...headers });
   res.end(text);
 }
 
@@ -113,6 +113,12 @@ function guessImageType(buf) {
 
 // ─────────────────────────────── 静态资源 ───────────────────────────────
 
+/** 页面/脚本/样式禁用强缓存：镜像更新后用户刷新即可用上新前端（避免旧 app.js 被浏览器缓存） */
+const NO_CACHE_EXTS = new Set(['.html', '.htm', '.js', '.css']);
+function staticHeaders(ext) {
+  return NO_CACHE_EXTS.has(ext) ? { 'Cache-Control': 'no-cache' } : {};
+}
+
 function serveStatic(req, res, pathname) {
   let rel = pathname === '/' ? '/index.html' : pathname;
   const full = safeJoin(PUBLIC_DIR, rel.replace(/^\/+/, ''));
@@ -123,13 +129,13 @@ function serveStatic(req, res, pathname) {
       if (!path.extname(rel)) {
         return fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (e2, html) => {
           if (e2) return sendText(res, 404, 'Not Found');
-          sendText(res, 200, html, MIME['.html']);
+          sendText(res, 200, html, MIME['.html'], staticHeaders('.html'));
         });
       }
       return sendText(res, 404, 'Not Found');
     }
     const ext = path.extname(full).toLowerCase();
-    sendText(res, 200, data, MIME[ext] || 'application/octet-stream');
+    sendText(res, 200, data, MIME[ext] || 'application/octet-stream', staticHeaders(ext));
   });
 }
 

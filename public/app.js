@@ -64,11 +64,19 @@ function toast(message, kind = '') {
   setTimeout(() => el.remove(), 3200);
 }
 
+/** img / 下载链接等非 fetch 请求无法携带 Authorization 头，改为在 URL 上带 ?token=（服务端 checkAuth 支持） */
+function withToken(path) {
+  const token = getToken();
+  if (!token) return path;
+  return path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+}
+
 function coverSrc(url, fallbackURLs = []) {
   if (!url) return '';
   const q = new URLSearchParams({ url, v: '2' }); // v 参数换新缓存键，避免旧 HEIC 响应缓存 24h
   for (const fallback of fallbackURLs || []) if (fallback) q.append('fallback', fallback);
-  return '/api/cover?' + q.toString();
+  // 口令模式下 <img> 不会带 Authorization 头；必须把 token 挂在 URL 上，否则封面 401 → 占位图
+  return withToken('/api/cover?' + q.toString());
 }
 
 /** 封面加载失败时的占位图（避免出现裂图） */
@@ -491,7 +499,7 @@ async function loadTasks(silent = false) {
               <td>${t.total > 0 ? `${t.saved}/${t.total}` : (t.saved ? `已下载 ${t.saved} 章` : '—')}</td>
               <td>${['准备中', '下载中'].includes(t.state)
                 ? `<button class="btn danger" data-cancel="${t.id}">取消</button>`
-                : (t.state === '下载完成' && t.fileName ? `<a class="btn" href="/api/file?name=${encodeURIComponent(t.fileName)}">下载</a>` : '')}</td>
+                : (t.state === '下载完成' && t.fileName ? `<a class="btn" href="${esc(withToken('/api/file?name=' + encodeURIComponent(t.fileName)))}">下载</a>` : '')}</td>
             </tr>`).join('')}
         </tbody>
       </table>`;
@@ -541,7 +549,7 @@ async function loadLibrary() {
               <td>${fmtSize(f.size)}</td>
               <td>${fmtTime(f.mtimeMs)}</td>
               <td>
-                <a class="btn" href="/api/file?name=${encodeURIComponent(f.fileName)}">下载</a>
+                <a class="btn" href="${esc(withToken('/api/file?name=' + encodeURIComponent(f.fileName)))}">下载</a>
                 <button class="btn danger" data-del="${esc(f.fileName)}">删除</button>
               </td>
             </tr>`).join('')}
