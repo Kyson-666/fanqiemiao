@@ -5,12 +5,14 @@
 #   - ${DOWNLOAD_HOST_DIR:-./downloads}  → /downloads   （小说成品 TXT，持久化目标）
 #
 # 用法：
-#   cp .env.example .env   # 按需修改下载目录 / 口令
-#   docker compose up -d --build
+#   cp .env.example .env          # 按需修改下载目录 / 口令
+#   docker compose up -d          # 默认：拉取已发布镜像（不会本地构建）
+#   docker compose up -d --build  # 可选：从源码本地构建（构建时联网下载内核）
 #   浏览器打开 http://<服务器IP>:8080
 
 services:
   fanqiemiao-web:
+    # 仅在 `docker compose up --build` 时生效；默认的 `up` 会直接拉取下面的已发布镜像
     build:
       context: .
       args:
@@ -18,10 +20,9 @@ services:
         # 国内网络可保留加速前缀；如直连顺畅可置空
         KERNEL_MIRROR: ${KERNEL_MIRROR:-https://ghfast.top/}
     image: "${IMAGE:-ghcr.io/hanyuestar/fanqiemiao}:${TAG:-latest}"
-    # 也可直接用 Docker Hub 镜像：
-    #   IMAGE=kyson666/fanqiemiao docker compose up -d
-    # 本地自行构建（覆盖上面的 image）：
-    #   docker compose up -d --build
+    # 切换镜像源：
+    #   IMAGE=kyson666/fanqiemiao docker compose up -d   # Docker Hub
+    #   TAG=v1.0.0 docker compose up -d                  # 指定版本
     container_name: fanqiemiao-web
     ports:
       - "${WEB_PORT:-8080}:8080"

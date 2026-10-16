@@ -69,15 +69,20 @@
 git clone https://github.com/hanyuestar/fanqiemiao.git
 cd fanqiemiao
 cp .env.example .env        # 按需修改：端口 / 口令 / 持久化目录
-docker compose up -d --build
+docker compose up -d        # 直接拉取已发布的多架构镜像（amd64 / arm64）
 ```
 
 浏览器访问：`http://<服务器IP>:8080`
 
-> 也可直接使用已发布的镜像（无需本地构建）：
+> **从源码本地构建**（可选；构建时会联网下载内核二进制，耗时更长）：
 > ```bash
-> IMAGE=ghcr.io/hanyuestar/fanqiemiao docker compose up -d
-> # 或 Docker Hub：IMAGE=kyson666/fanqiemiao docker compose up -d
+> docker compose up -d --build
+> ```
+>
+> **切换镜像源 / 版本**：
+> ```bash
+> IMAGE=kyson666/fanqiemiao docker compose up -d   # 改用 Docker Hub
+> TAG=v1.0.0 docker compose up -d                 # 指定版本标签
 > ```
 
 ### 方式二：docker run
