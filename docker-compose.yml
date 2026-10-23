@@ -19,7 +19,7 @@ services:
         KERNEL_VERSION: ${KERNEL_VERSION:-v2.4.15}
         # 国内网络可保留加速前缀；如直连顺畅可置空
         KERNEL_MIRROR: ${KERNEL_MIRROR:-https://ghfast.top/}
-    image: "${IMAGE:-ghcr.io/hanyuestar/fanqiemiao}:${TAG:-latest}"
+    image: "${IMAGE:-ghcr.io/kyson-666/fanqiemiao}:${TAG:-latest}"
     # 切换镜像源：
     #   IMAGE=kyson666/fanqiemiao docker compose up -d   # Docker Hub
     #   TAG=v1.0.3 docker compose up -d                  # 指定版本
